@@ -7,5 +7,3 @@ The manual is available at https://casys-kaist.github.io/pintos-kaist/.
 MyeongSeok98
 
 테스트 한번더
-
-테스트 한번더
