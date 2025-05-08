@@ -7,13 +7,9 @@ The manual is available at https://casys-kaist.github.io/pintos-kaist/.
 MyeongSeok98
 
 
-aaaa
-aa
-a
+123123
+123123
 
-테스트 한번더
-b
-b
-b
-b
-
+123123123
+12
+313
