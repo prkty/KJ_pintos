@@ -20,9 +20,6 @@
 /* OS 부팅 이후 타이머 틱 수. (1초에 100번, 10ms)*/
 static int64_t ticks;
 
-/* 웨이팅 리스트 작성*/
-static struct list waiting_list;
-
 /* 타이머 틱당 루프 수입니다.
    timer_calibrate()로 초기화됐습니다. */
 static unsigned loops_per_tick;
@@ -31,7 +28,8 @@ static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
-static void timer_wakeup (int64_t ticks);
+
+static struct list sleep_list;   // 잠재울 리스트 선언
 
 /* 8254 프로그래머블 인터벌 타이머(PIT)를 설정하여
    초당 PIT_FREQ 횟수를 인터럽트하고
@@ -42,14 +40,12 @@ timer_init (void) {
 	   가장 가까운 쪽으로 반올림됩니다. */
 	uint16_t count = (1193180 + TIMER_FREQ / 2) / TIMER_FREQ;
 
-	/* 웨이팅 리스트 초기화 */
-	list_init (&waiting_list);
-
 	outb (0x43, 0x34);    /* CW: counter 0, LSB then MSB, mode 2, binary. */
 	outb (0x40, count & 0xff);
 	outb (0x40, count >> 8);
 
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");  // 중요! 틱마다 타이머 인터럽트를 실행
+	list_init(&sleep_list);    ////
 }
 
 /* 짧은 지연을 구현하는 데 사용되는 loops_per_tick을 보정합니다. */
@@ -87,11 +83,13 @@ timer_ticks (void) {
 	return t;
 }
 
-/* 특정 시점 이후부터 발생한 타이머 틱 횟수를 반환한다. */
+/* timer_ticks()가 반환된 후 
+   경과한 타이머 틱 수를 반환합니다. */
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
+
 
 bool wakeup_cmp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
 	struct thread *T_A = list_entry(a, struct thread, elem);
@@ -111,10 +109,13 @@ timer_sleep (int64_t ticks) {
 	ASSERT (intr_get_level () == INTR_ON);   // [오류] 현재 인터럽트가 ON이라면 함수 진행
 
 	enum intr_level old_level = intr_disable ();
-	list_insert_ordered(&waiting_list, &(curr -> elem), wakeup_cmp, NULL);
+	list_insert_ordered(&sleep_list, &(curr -> elem), wakeup_cmp, NULL);
 	thread_block();
 	intr_set_level (old_level);
 }
+
+
+
 
 /* 약 MS 밀리초 동안 실행을 일시 중지합니다. */
 void
@@ -145,17 +146,17 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 
 	ticks++;
-	timer_wakeup(ticks);
 	thread_tick ();
-}
 
-static void timer_wakeup (int64_t ticks){
-	while(!list_empty(&waiting_list)){
-		struct thread *next = list_entry (list_front (&waiting_list), struct thread, elem);
-		if(ticks < next -> wakeup)
-			break;
-		list_pop_front(&waiting_list);
-		thread_unblock(next);
+	while(!(list_empty(&sleep_list))) {
+	struct thread *T1 = list_entry(list_front(&sleep_list), struct thread, elem);
+
+	if (T1 -> wakeup <= ticks) {
+	list_pop_front(&sleep_list);
+    thread_unblock(T1);
+	}
+	else
+		break;
 	}
 }
 
