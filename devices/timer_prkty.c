@@ -212,3 +212,5 @@ real_time_sleep (int64_t num, int32_t denom) {
 		busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
 	}
 }
+
+// 수정본
