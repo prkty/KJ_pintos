@@ -1,24 +1,11 @@
 FAIL
-Test output failed to match any acceptable form.
-
-Acceptable output:
-  (priority-donate-sema) begin
-  (priority-donate-sema) Thread L acquired lock.
-  (priority-donate-sema) Thread L downed semaphore.
-  (priority-donate-sema) Thread H acquired lock.
-  (priority-donate-sema) Thread H finished.
-  (priority-donate-sema) Thread M finished.
-  (priority-donate-sema) Thread L finished.
-  (priority-donate-sema) Main thread finished.
-  (priority-donate-sema) end
-Differences in `diff -u' format:
-  (priority-donate-sema) begin
-- (priority-donate-sema) Thread L acquired lock.
-- (priority-donate-sema) Thread L downed semaphore.
-- (priority-donate-sema) Thread H acquired lock.
-- (priority-donate-sema) Thread H finished.
-- (priority-donate-sema) Thread M finished.
-- (priority-donate-sema) Thread L finished.
-  (priority-donate-sema) Main thread finished.
-- (priority-donate-sema) end
-+ (priority-donate-sema) 
+Kernel panic in run: PANIC at ../../lib/kernel/list.c:158 in list_insert(): assertion `is_interior (before) || is_tail (before)' failed.
+Call stack: 0x80042132ac 0x80042137f5 0x8004213a9d 0x8004209735 0x8004209b96 0x8004218563 0x800420718a
+Translation of call stack:
+0x00000080042132ac: debug_panic (lib/kernel/debug.c:32)
+0x00000080042137f5: list_insert (lib/kernel/list.c:159)
+0x0000008004213a9d: list_push_back (lib/kernel/list.c:204)
+0x0000008004209735: sema_down (threads/synch.c:70)
+0x0000008004209b96: lock_acquire (threads/synch.c:192)
+0x0000008004218563: l_thread_func (tests/threads/priority-donate-sema.c:55)
+0x000000800420718a: kernel_thread (threads/thread.c:394)

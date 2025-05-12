@@ -4,15 +4,18 @@ Kernel command line: -q run priority-donate-sema
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  32,716,800 loops/s.
+Calibrating timer...  39,270,400 loops/s.
 Boot complete.
 Executing 'priority-donate-sema':
 (priority-donate-sema) begin
 (priority-donate-sema) Main thread finished.
-(priority-donate-sema) 
+(priority-donate-sema) end
 Execution of 'priority-donate-sema' complete.
+Kernel PANIC at ../../lib/kernel/list.c:158 in list_insert(): assertion `is_interior (before) || is_tail (before)' failed.
+Call stack: 0x80042132ac 0x80042137f5 0x8004213a9d 0x8004209735 0x8004209b96 0x8004218563 0x800420718a.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
 Timer: 31 ticks
-Thread: 0 idle ticks, 32 kernel ticks, 0 user ticks
-Console: 499 characters output
-Keyboard: 0 keys pressed
-Powering off...
+Thread: 0 idle ticks, 31 kernel ticks, 0 user ticks
+Console: 

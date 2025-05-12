@@ -16,8 +16,12 @@ Executing 'priority-donate-multiple':
 (priority-donate-multiple) Main thread should have priority 31.  Actual priority: 31.
 (priority-donate-multiple) end
 Execution of 'priority-donate-multiple' complete.
-Timer: 43 ticks
+(priority-donate-multiple) Thread b acquired lock b.
+Kernel PANIC at ../../threads/synch.c:223 in lock_release(): assertion `lock_held_by_current_thread (lock)' failed.
+Call stack: 0x80042132ac 0x8004209d3e 0x8004217c60 0x800420718a.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 44 ticks
 Thread: 0 idle ticks, 44 kernel ticks, 0 user ticks
-Console: 946 characters output
-Keyboard: 0 keys pressed
-Powering off...
+Console: 1

@@ -16,8 +16,12 @@ Executing 'priority-donate-nest':
 (priority-donate-nest) Low thread should have priority 31.  Actual priority: 31.
 (priority-donate-nest) end
 Execution of 'priority-donate-nest' complete.
-Timer: 42 ticks
-Thread: 0 idle ticks, 42 kernel ticks, 0 user ticks
-Console: 898 characters output
-Keyboard: 0 keys pressed
-Powering off...
+(priority-donate-nest) High thread got the lock.
+Kernel PANIC at ../../lib/kernel/list.c:242 in list_remove(): assertion `is_interior (elem)' failed.
+Call stack: 0x80042132ac 0x8004213b02 0x8004213b67 0x800420989f 0x8004209d60 0x800421838b 0x800420718a.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 45 ticks
+Thread: 0 idle ticks, 45 kernel ticks, 0 user ticks
+Console: 1
