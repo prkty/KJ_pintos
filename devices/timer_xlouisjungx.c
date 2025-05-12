@@ -28,6 +28,8 @@ static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
+static struct list sleep_list;
+static bool wakeup_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 
 /* Sets up the 8254 Programmable Interval Timer (PIT) to
    interrupt PIT_FREQ times per second, and registers the
@@ -136,6 +138,23 @@ timer_elapsed (int64_t then) {
 void
 timer_sleep (int64_t ticks) {
 
+	if(ticks <= 0) return 0;
+
+	enum intr_level old_level = intr_disable ();
+
+	// 1. 깨어날 시간을 계산하고
+	struct thread *cur = thread_current();
+	cur->wakeup = timer_ticks() + ticks;
+	
+
+	// 2. 슬립 리스트에 넣고
+	list_insert_ordered(&sleep_list, &cur->elem, wakeup_less, NULL);
+	
+	// 3. 스레드를 block 상태로 전환
+	thread_block();
+	intr_set_level (old_level);
+
+	/*
 	// 현재 틱 수를 기록.
 	int64_t start = timer_ticks ();
 
@@ -146,6 +165,17 @@ timer_sleep (int64_t ticks) {
 	// 스케줄러에 의해 다시 실행될 떄마다 조건을 확인함.
 	while (timer_elapsed (start) < ticks)
 		thread_yield ();
+	*/
+}
+
+static bool
+wakeup_less (const struct list_elem *a_, const struct list_elem *b_,
+            void *aux UNUSED) 
+{
+  struct thread *a = list_entry (a_, struct thread, elem);
+  struct thread *b = list_entry (b_, struct thread, elem);
+   
+  return a->wakeup < b->wakeup;
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -200,6 +230,26 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	// 필요한 경우 스레드 전환(context switching)을 수행.
 	// timer_sleep 등으로 잠든 스레드를 꺠우는 등의 작업을 수행.
 	thread_tick ();
+
+	// 1. 슬립 리스트의 맨 앞 스레드의 wakeup_tick 확인
+	// 2. 현재 ticks 값 이상이면 리스트에서 제거하고 thread_unblock()으로 깨움
+	// 3. 리스트가 정렬되어 있으므로, 첫 번째 스레드가 아직 깨어날 시간이 아니면 종료
+
+	while(!list_empty(&sleep_list)) {
+
+		// 맨 앞 member 알기
+		struct list_elem *a = list_front(&sleep_list);
+		
+		// 일어날 시간에 대한 정보를 가져옴.
+		struct thread *b = list_entry (a, struct thread, elem);
+		if(ticks >= b->wakeup) {
+			list_pop_front(&sleep_list);
+			thread_unblock(b);
+		}
+		else {
+			break;
+		}
+	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
