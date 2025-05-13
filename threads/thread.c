@@ -325,7 +325,7 @@ thread_yield (void) {
 //////////////////////////////
 
 //////////////////////////////
-/* 현재 스레드의 우선순위를 NEW_PRIORITY로 설정합니다. */
+/* 현재 실행 중인 스레드의 우선순위를 동적으로 변경합니다. */
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;

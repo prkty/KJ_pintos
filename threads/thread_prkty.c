@@ -54,6 +54,9 @@ static unsigned thread_ticks;   /* # 마지막 yeild 이후 타이머 틱. */
    커널 명령줄 옵션 "-o mlfqs"로 제어됩니다. */
 bool thread_mlfqs;
 
+//////////////////////////////// 추가된 우선순위 비교
+bool priority_cmp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
 static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
@@ -200,6 +203,13 @@ thread_create (const char *name, int priority,
 	/* 실행 대기열에 추가합니다. */
 	thread_unblock (t);
 
+	struct thread *T1 = list_entry(list_front(&ready_list), struct thread, elem);
+	enum intr_level old_level;
+	old_level = intr_disable ();   // 인터럽트를 비활성화하고 이전 인터럽트 상태를 반환합니다.
+	if ((thread_current() != idle_thread) && (thread_current() -> priority < T1 -> priority))
+	thread_yield (); // 우선순위를 바꿨다면, 우선순위에 따라 yield 해줘야한다.
+	intr_set_level (old_level);   // 인터럽트 다시 받게 재세팅
+
 	return tid;
 }
 
@@ -233,7 +243,7 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_insert_ordered (&ready_list, &t->elem, priority_cmp, NULL);    //////////////////////////////
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -286,6 +296,7 @@ thread_exit (void) {
 	NOT_REACHED ();
 }
 
+//////////////////////////////
 // 스레드 스트럭쳐 내부의 인자 가져옴(priority가져와야함)
 bool priority_cmp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
 	struct thread *T_A = list_entry(a, struct thread, elem);
@@ -311,12 +322,23 @@ thread_yield (void) {
 }
 // 현재 yield의 방식이 현재 들어온 스레드를 바로 준비 리스트로 옮기니까, priority 확인해서
 // 현재 스레드보다 높다면, yield 시키면 되지 않나 싶긴하다 일단 list_insert_ordered을 통해 구현해봐야겠다.
+//////////////////////////////
 
-/* 현재 스레드의 우선순위를 NEW_PRIORITY로 설정합니다. */
+//////////////////////////////
+/* 현재 실행 중인 스레드의 우선순위를 동적으로 변경합니다. */
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	if (list_empty(&ready_list))  return;   // 리스트가 비었을때 그냥 종료
+	struct thread *T1 = list_entry(list_front(&ready_list), struct thread, elem);
+	enum intr_level old_level;
+
+	old_level = intr_disable ();   // 인터럽트를 비활성화하고 이전 인터럽트 상태를 반환합니다.
+	if ((thread_current() != idle_thread) && (thread_current() -> priority < T1 -> priority))
+	thread_yield (); // 우선순위를 바꿨다면, 우선순위에 따라 yield 해줘야한다.
+	intr_set_level (old_level);   // 인터럽트 다시 받게 재세팅
 }
+//////////////////////////////
 
 /* 현재 스레드의 우선순위를 반환합니다. */
 int
