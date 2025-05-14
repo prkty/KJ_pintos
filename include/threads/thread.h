@@ -91,11 +91,14 @@ typedef int tid_t;
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
+	int original_priority;				/* 원본 우선순위 */
 	int priority;                       /* Priority. */
 	int64_t start;     // 시작 시간
 	int64_t wakeup;    // 일어나는 시간
+	struct lock *waiting_lock;			/* 기다리고 있는 락 */ 
+	struct list donation_list;			/* 기부한 쓰레드 목록 */
+	struct list_elem donation_elem;  	/* donations 리스트용 elem */
 
-	int64_t wakeup;
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -129,6 +132,10 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
+
+/* 추가한 함수들*/
+bool priority_comp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_check_preempt(void);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);

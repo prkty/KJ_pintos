@@ -62,6 +62,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+bool priority_comp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_check_preempt(void);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -204,9 +206,12 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	/* Add to run queue. */
+	/* 쓰레드를 레디큐에 올린다. */
 	thread_unblock (t);
-
+	struct thread *curr = thread_current();
+	if(curr != idle_thread && t->priority > curr -> priority){
+		thread_yield();
+	}
 	return tid;
 }
 
@@ -235,14 +240,21 @@ thread_block (void) {
 void
 thread_unblock (struct thread *t) {
 	enum intr_level old_level;
-
 	ASSERT (is_thread (t));
-
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+
+	list_insert_ordered (&ready_list, &t->elem, priority_comp, NULL);
 	t->status = THREAD_READY;
+
 	intr_set_level (old_level);
+}
+
+bool priority_comp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread *T_A = list_entry(a, struct thread, elem);
+	struct thread *T_B = list_entry(b, struct thread, elem);
+
+	return T_A -> priority > T_B -> priority;
 }
 
 /* Returns the name of the running thread. */
@@ -296,23 +308,54 @@ thread_exit (void) {
    may be scheduled again immediately at the scheduler's whim. */
 void
 thread_yield (void) {
+	// 현재 쓰레드 변수에 저장
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
+	// 외부 인터럽트 처리중이 아닐때 진행
 	ASSERT (!intr_context ());
 
+	// 인터럽트 비활성화를 시키기 위해 미리 저장
 	old_level = intr_disable ();
+	// 현재 쓰레드가 idle 상태가 아닐떄 if문 진핸
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		/* 레디리스트에 삽입 (우선순위별로) */
+		list_insert_ordered (&ready_list, &curr->elem, priority_comp, NULL);
+		/* 레디리스트에 삽입 (우선순위별로) */
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-void
-thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+void thread_set_priority (int new_priority) {
+	enum intr_level old_level;
+	struct thread *curr = thread_current(); 
+	curr -> priority = new_priority;
+	if(list_empty(&ready_list)) return;
+	old_level = intr_disable();
+	struct thread *t1 = list_entry(list_front(&ready_list), struct thread, elem);
+	if(curr != idle_thread && new_priority < t1 -> priority){
+		thread_yield();
+	}
+
+	intr_set_level(old_level);
 }
+
+/* 레디리스트의 맨앞 쓰레드의 우선순위와 현재 쓰레드의 우선순위 비교해서 변경하는 함수 */
+void thread_check_preempt(void){
+	enum intr_level old_level;
+	struct thread *curr = thread_current();
+	if(list_empty(&ready_list)){
+		return;
+	}
+	old_level = intr_disable();
+	struct thread *t1 = list_entry(list_front(&ready_list), struct thread, elem);
+	if(curr != idle_thread && curr -> priority < t1 -> priority){
+		thread_yield();
+	}
+	intr_set_level(old_level);
+}
+
 
 /* Returns the current thread's priority. */
 int
