@@ -122,8 +122,9 @@ static bool wakeup_cmp (const struct list_elem *a, const struct list_elem *b, vo
 	struct thread *T_A = list_entry(a, struct thread, elem);
 	struct thread *T_B = list_entry(b, struct thread, elem);
 
-	if(T_A -> wakeup == T_B -> wakeup) return T_A -> priority > T_B -> priority;
-
+	if(T_A -> wakeup == T_B -> wakeup){
+		return T_A -> priority > T_B -> priority;
+	}
 	return T_A -> wakeup < T_B -> wakeup;
 }
 
