@@ -62,6 +62,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+static bool priority_fix (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void check_priority_Max(void);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -205,7 +207,15 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	/* Add to run queue. */
+
+	// 언블록(레디 리스트의 맨앞 우선순위를 러닝)
 	thread_unblock (t);
+
+	// 만약, 새로운 우선순위 > 현재 우선순위
+	if(t->priority > thread_current() -> priority) thread_yield();
+	// yield함수로 레디로 ㄱㄱ
+	
+	// 아니면 그냥 ㄱㄱ
 
 	return tid;
 }
@@ -240,9 +250,22 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+
+	// 내림 차순으로 정리
+	list_insert_ordered(&ready_list, &t->elem, priority_fix, NULL);
+
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
+}
+
+// 내림 차순
+static bool priority_fix (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread *thread_a = list_entry(a, struct thread, elem);
+	struct thread *thread_b = list_entry(b, struct thread, elem);
+
+	if(thread_a == NULL || thread_b == NULL) return 0;
+	
+	return thread_a->priority > thread_b -> priority;
 }
 
 /* Returns the name of the running thread. */
@@ -303,7 +326,7 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, priority_fix, NULL);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -312,6 +335,15 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	check_priority_Max();
+}
+
+void check_priority_Max(void) {
+	if(list_empty(&ready_list)) return;
+
+	struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+	
+	if(thread_get_priority() < t->priority) thread_yield();
 }
 
 /* Returns the current thread's priority. */

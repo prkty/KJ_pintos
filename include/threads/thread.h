@@ -94,8 +94,6 @@ typedef int tid_t;
 	int priority;                       /* Priority. */
 	int64_t start;     // 시작 시간
 	int64_t wakeup;    // 일어나는 시간
-
-	int64_t wakeup;
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -146,6 +144,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void test_max_priority(void);
 
 #endif /* threads/thread.h */
 
