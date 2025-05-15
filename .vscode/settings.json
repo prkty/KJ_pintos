@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "stddef.h": "c",
-        "timer.h": "c"
+        "timer.h": "c",
+        "round.h": "c"
     }
 }
