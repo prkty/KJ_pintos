@@ -324,6 +324,20 @@ thread_yield (void) {
 // 현재 스레드보다 높다면, yield 시키면 되지 않나 싶긴하다 일단 list_insert_ordered을 통해 구현해봐야겠다.
 //////////////////////////////
 
+/* 현재 lock 가진 실행중인 스레드와 waiter 리스트의 스레드와 비교하여
+   우선순위를 가지는 스레드를 재실행합니다. */
+void
+thread_check_priority (void) {
+	if (list_empty(&ready_list))  return;   // 리스트가 비었을때 그냥 종료
+	struct thread *T1 = list_entry(list_front(&ready_list), struct thread, elem);
+	enum intr_level old_level;
+
+	old_level = intr_disable ();   // 인터럽트를 비활성화하고 이전 인터럽트 상태를 반환합니다.
+	if ((thread_current() != idle_thread) && (thread_current() -> priority < T1 -> priority))
+	thread_yield (); // 우선순위를 바꿨다면, 우선순위에 따라 yield 해줘야한다.
+	intr_set_level (old_level);   // 인터럽트 다시 받게 재세팅
+}
+
 //////////////////////////////
 /* 현재 실행 중인 스레드의 우선순위를 동적으로 변경합니다. */
 void
