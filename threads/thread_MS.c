@@ -136,7 +136,7 @@ thread_start (void) {
 }
 
 /* Called by the timer interrupt handler at each timer tick.
-   Thus, this function runs in an external interrupt context. */
+   Thus, thigit s function runs in an external interrupt context. */
 void
 thread_tick (void) {
 	struct thread *t = thread_current ();
@@ -331,6 +331,7 @@ void thread_set_priority (int new_priority) {
 	enum intr_level old_level;
 	struct thread *curr = thread_current(); 
 	curr -> priority = new_priority;
+	curr -> original_priority = new_priority;
 	if(list_empty(&ready_list)) return;
 	old_level = intr_disable();
 	struct thread *t1 = list_entry(list_front(&ready_list), struct thread, elem);
@@ -452,6 +453,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	t->original_priority = priority;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
