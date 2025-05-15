@@ -18,10 +18,9 @@ void sema_self_test (void);
 
 /* Lock. */
 struct lock {
-	struct thread *holder;      /* 디버깅을 위한 잠금을 유지하는 스레드 */
-	struct semaphore semaphore; /* 액세스를 제어하는 ​​이진 세마포어 */
+	struct thread *holder;      /* Thread holding lock (for debugging). */
+	struct semaphore semaphore; /* Binary semaphore controlling access. */
 };
-// 아마 여기에 락을 건내 주기위해 도네이션을 위한 priority를 건내줘야하지 않을까 싶긴함.
 
 void lock_init (struct lock *);
 void lock_acquire (struct lock *);
@@ -31,7 +30,7 @@ bool lock_held_by_current_thread (const struct lock *);
 
 /* Condition variable. */
 struct condition {
-	struct list waiters;        /* 기다리는 세마포어 리스트. */
+	struct list waiters;        /* List of waiting threads. */
 };
 
 void cond_init (struct condition *);
