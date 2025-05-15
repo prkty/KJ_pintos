@@ -109,9 +109,11 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
+	if (!list_empty (&sema->waiters)){
+		list_sort(&sema->waiters, priority_comp, NULL);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
+	}
 	sema->value++;
 	thread_check_preempt();
 	intr_set_level (old_level);
@@ -185,8 +187,8 @@ lock_acquire (struct lock *lock) {
 
 	enum intr_level old = intr_disable();
 	if(lock -> holder != NULL && lock -> holder -> priority < thread_current() -> priority){
-		donate_priority(thread_current(), lock -> holder);
 		curr -> waiting_lock = lock;
+		donate_priority(thread_current());
 	}
 	intr_set_level(old);
 
@@ -196,9 +198,17 @@ lock_acquire (struct lock *lock) {
 
 }
 
-void donate_priority(struct thread *donor, struct thread *receiver){
+void donate_priority(struct thread *donor){
 	enum intr_level old = intr_disable();
-	receiver -> priority = donor -> priority;
+	int depth = 0;
+	int donor_priority = donor -> original_priority;
+	while(depth < 8){
+		if(donor -> waiting_lock == NULL) break;
+		struct thread *receiver = donor -> waiting_lock -> holder;
+		receiver -> priority = donor_priority;
+		donor = receiver;
+		depth++;
+	}
 	intr_set_level(old);
 }
 
@@ -238,6 +248,8 @@ lock_release (struct lock *lock) {
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
+
+
 
 /* 현재 스레드가 LOCK을 보유하고 있으면 true를 반환하고, 
    그렇지 않으면 false를 반환합니다. 
@@ -311,10 +323,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
+	if (!list_empty (&cond->waiters)){
 		list_sort(&cond->waiters, cond_priority_comp, NULL);
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* COND(LOCK으로 보호됨)를 대기 중인 모든 스레드를 깨웁니다. (있는 경우)
