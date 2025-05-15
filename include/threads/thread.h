@@ -85,7 +85,8 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
-struct thread {
+
+ struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
@@ -93,8 +94,6 @@ struct thread {
 	int priority;                       /* Priority. */
 	int64_t start;     // 시작 시간
 	int64_t wakeup;    // 일어나는 시간
-
-
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -146,6 +145,9 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
+bool thread_priority_cmp(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void test_max_priority(void);
+
 #endif /* threads/thread.h */
 
-// 수정본 //
+// 수정본
