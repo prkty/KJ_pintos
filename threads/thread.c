@@ -62,8 +62,6 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
-static bool priority_fix (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-void check_priority_Max(void);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -207,15 +205,7 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	/* Add to run queue. */
-
-	// 언블록(레디 리스트의 맨앞 우선순위를 러닝)
 	thread_unblock (t);
-
-	// 만약, 새로운 우선순위 > 현재 우선순위
-	if(t->priority > thread_current() -> priority) thread_yield();
-	// yield함수로 레디로 ㄱㄱ
-	
-	// 아니면 그냥 ㄱㄱ
 
 	return tid;
 }
@@ -250,22 +240,9 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-
-	// 내림 차순으로 정리
-	list_insert_ordered(&ready_list, &t->elem, priority_fix, NULL);
-
+	list_push_back (&ready_list, &t->elem);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
-}
-
-// 내림 차순
-static bool priority_fix (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-	struct thread *thread_a = list_entry(a, struct thread, elem);
-	struct thread *thread_b = list_entry(b, struct thread, elem);
-
-	if(thread_a == NULL || thread_b == NULL) return 0;
-	
-	return thread_a->priority > thread_b -> priority;
 }
 
 /* Returns the name of the running thread. */
@@ -274,9 +251,9 @@ thread_name (void) {
 	return thread_current ()->name;
 }
 
-/* Returns the running thread.
-   This is running_thread() plus a couple of sanity checks.
-   See the big comment at the top of thread.h for details. */
+/* 실행 중인 스레드를 반환합니다.
+   이것은 running_thread()와 몇 가지 점검입니다.
+   자세한 내용은 thread.h 상단의 큰 댓글을 참조하세요. */
 struct thread *
 thread_current (void) {
 	struct thread *t = running_thread ();
@@ -315,35 +292,58 @@ thread_exit (void) {
 	NOT_REACHED ();
 }
 
-/* Yields the CPU.  The current thread is not put to sleep and
-   may be scheduled again immediately at the scheduler's whim. */
+/* CPU를 양보합니다. 현재 스레드가 sleep 모드로 전환되지 않았습니다
+   스케줄러의 요청에 따라 즉시 다시 사용할 수 있습니다. */
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
-	ASSERT (!intr_context ());
+	ASSERT (!intr_context ());     // 외부 인터럽트 처리 중일때 함수 탈출(스레드 실행중)
 
-	old_level = intr_disable ();
+	old_level = intr_disable ();   // 인터럽트를 비활성화하고 이전 인터럽트 상태를 반환합니다.
 	if (curr != idle_thread)
-		list_insert_ordered(&ready_list, &curr->elem, priority_fix, NULL);
+		list_push_back (&ready_list, &curr->elem);   // LIST의 끝에 ELEM을 삽입하여 LIST의 뒤에 위치하도록 합니다.
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
+
+void
+thread_tosleep (void) {
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());  // 외부 인터럽트 처리 중일때 함수 탈출(스레드 실행중)
+
+	old_level = intr_disable ();
+	if (curr != idle_thread)
+		list_push_back (&waiting_list, &curr->elem);
+	thread_block();
+}
+
+void
+waiting_list (void) {
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());  // 외부 인터럽트 처리 중일때 함수 탈출(스레드 실행중)
+
+	old_level = intr_disable ();
+	if (curr != idle_thread) {
+		list_push_back (&ready_list, &curr->elem);
+		thread_block();
+	}
+	do_schedule (THREAD_READY);
+	thread_unblock(curr);
+	intr_set_level (old_level);
+}
+
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
-	check_priority_Max();
-}
-
-void check_priority_Max(void) {
-	if(list_empty(&ready_list)) return;
-
-	struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
-	
-	if(thread_get_priority() < t->priority) thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -553,10 +553,10 @@ thread_launch (struct thread *th) {
 			);
 }
 
-/* Schedules a new process. At entry, interrupts must be off.
- * This function modify current thread's status to status and then
- * finds another thread to run and switches to it.
- * It's not safe to call printf() in the schedule(). */
+/* 새 프로세스를 예약합니다. 시작할 때는 인터럽트가 꺼져 있어야 합니다.
+ * 이 함수는 현재 스레드의 상태를 상태로 수정한 다음
+ * 실행할 다른 스레드를 찾아서 전환합니다.
+ * 스케줄에서 printf()라고 부르는 것은 안전하지 않습니다. */
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
