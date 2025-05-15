@@ -29,7 +29,7 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 
-static struct list sleep_list;   // 잠재울 리스트 선언
+static struct list sleep_list;   //// 잠재울 리스트 선언
 
 /* 8254 프로그래머블 인터벌 타이머(PIT)를 설정하여
    초당 PIT_FREQ 횟수를 인터럽트하고
@@ -45,7 +45,7 @@ timer_init (void) {
 	outb (0x40, count >> 8);
 
 	intr_register_ext (0x20, timer_interrupt, "8254 Timer");  // 중요! 틱마다 타이머 인터럽트를 실행
-	list_init(&sleep_list);    ////
+	list_init(&sleep_list);    //// 초기화를 위해사용 (쓰레기값 방지)
 }
 
 /* 짧은 지연을 구현하는 데 사용되는 loops_per_tick을 보정합니다. */
@@ -90,10 +90,12 @@ timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-
 bool wakeup_cmp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
 	struct thread *T_A = list_entry(a, struct thread, elem);
 	struct thread *T_B = list_entry(b, struct thread, elem);
+	
+	if(T_A -> wakeup == T_B -> wakeup)
+		return T_A -> priority > T_B -> priority;
 	return T_A -> wakeup < T_B -> wakeup;
 }
 
@@ -108,14 +110,11 @@ timer_sleep (int64_t ticks) {
 
 	ASSERT (intr_get_level () == INTR_ON);   // [오류] 현재 인터럽트가 ON이라면 함수 진행
 
-	enum intr_level old_level = intr_disable ();
+	enum intr_level old_level = intr_disable ();  // 인터럽트 받지 않음 (밑의 과정중에 잘못됨을 방지)
 	list_insert_ordered(&sleep_list, &(curr -> elem), wakeup_cmp, NULL);
 	thread_block();
-	intr_set_level (old_level);
+	intr_set_level (old_level);  // 인터럽트를 받음 (전단계로 복귀)
 }
-
-
-
 
 /* 약 MS 밀리초 동안 실행을 일시 중지합니다. */
 void
