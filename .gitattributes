@@ -1,0 +1,5 @@
+# 1) 모든 텍스트 파일을 자동 인식(text=auto)
+* text=auto
+
+# 2) 체크아웃 시 CRLF로 변환(eol=crlf)
+* eol=crlf

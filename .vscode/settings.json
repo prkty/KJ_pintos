@@ -1,6 +1,11 @@
 {
     "files.associations": {
         "stddef.h": "c",
-        "timer.h": "c"
+        "timer.h": "c",
+        "*.inc": "c",
+        "lib.h": "c",
+        "malloc.h": "c",
+        "syscall.h": "c",
+        "interrupt.h": "c"
     }
 }

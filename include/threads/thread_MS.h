@@ -85,23 +85,27 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
-struct thread {
+
+ struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
+	int original_priority;				/* 원본 우선순위 */
 	int priority;                       /* Priority. */
 	int64_t start;     // 시작 시간
 	int64_t wakeup;    // 일어나는 시간
-
+	struct lock *waiting_lock;			/* 기다리고 있는 락 */ 
+	struct list donation_list;			/* 기부한 쓰레드 목록 */
+	struct list_elem donation_elem;  	/* donations 리스트용 elem */
+	int having_locks;					/* 현재 쓰레드가 락을 가지고 있는지 아닌지 확인용 */
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
-#ifdef USERPROG
+#define USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-#endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;
@@ -129,6 +133,10 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 void thread_block (void);
 void thread_unblock (struct thread *);
 
+/* 추가한 함수들*/
+bool priority_comp (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_check_preempt(void);
+
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
@@ -137,6 +145,7 @@ void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
 int thread_get_priority (void);
+int thread_get_origianl_priority (void);
 void thread_set_priority (int);
 
 int thread_get_nice (void);
