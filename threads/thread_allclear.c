@@ -214,21 +214,21 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
-	// #define USERPROG
-	// /** project2-System Call */
-    // t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
-    // if (t->fdt == NULL)
-    //     return TID_ERROR;
+	#ifdef USERPROG
+	/** project2-System Call */
+    t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+    if (t->fdt == NULL)
+        return TID_ERROR;
 
-    // t->exit_status = 0; 
+    t->exit_status = 0; 
 
-    // t->fd_idx = 3;
-    // t->fdt[0] = STDIN;   
-    // t->fdt[1] = STDOUT; 
-    // t->fdt[2] = STDERR;  
+    t->fd_idx = 3;
+    t->fdt[0] = STDIN;   
+    t->fdt[1] = STDOUT; 
+    t->fdt[2] = STDERR;  
 	
-    // list_push_back(&thread_current()->child_list, &t->child_elem);
-// #endif
+    list_push_back(&thread_current()->child_list, &t->child_elem);
+#endif
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
