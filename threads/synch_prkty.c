@@ -106,6 +106,7 @@ sema_try_down (struct semaphore *sema) {
 	return success;
 }
 
+//////////////////
 /* 세마포어에 대한 Up 또는 "V" 연산. SEMA 값을 증가시키고
    SEMA를 기다리는 스레드 중 하나를 깨웁니다(있는 경우).
 
@@ -118,17 +119,18 @@ sema_up (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters)) {
-		list_sort(&sema->waiters, priority_sema_cmp, NULL);
+		list_sort(&sema->waiters, priority_sema_cmp, NULL);   //// pop 이전에 정렬 수행
 		struct thread *T1 = list_entry(list_pop_front(&sema->waiters), struct thread, elem);  // 여기서 pop하지 않고 list_front만 해서 오류가 걸렸다. list 중복이 발생!
 		thread_unblock (T1);
 	}
 	sema->value++;
-	thread_check_priority();   ///// 해당 함수는 thread.c에 구현되어 있습니다. 
+	thread_check_priority();   //// 해당 함수는 thread.c에 구현되어 있습니다. 
 	// 세마 up 과정에서 현재 스레드가 waiter 리스트에서 lock을 가진 스레드가 배정되므로 
 	// 다른 lock을 가지지 않은 waiter 리스트의 스레드와 비교하여 우선순위에 따라 실행할 필요가 있다.
 	// 그러므로 thread_check_priority을 통해 priority가 높은 스레드를 체크하여 우선 실행됩니다.
 	intr_set_level (old_level);
 }
+//////////////////
 
 static void sema_test_helper (void *sema_);
 
