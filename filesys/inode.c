@@ -12,11 +12,16 @@
 
 /* On-disk inode.
  * Must be exactly DISK_SECTOR_SIZE bytes long. */
+/* 	
+	실제 디스크 상에 올라가있는 인덱스 노드
+	실제 파일에 대한 메타 데이터를 가지고 있음.
+	디스크상에 길이가 어느정도로 올라가있는지, 
+	512byte를 맞춰주기 위해 사용하지않는 나머지 공간이 어느정도인지 기록되어있음 */
 struct inode_disk {
-	disk_sector_t start;                /* First data sector. */
-	off_t length;                       /* File size in bytes. */
+	disk_sector_t start;                /* 첫 시작 데이터 섹터 */
+	off_t length;                       /* 저장된 공간의 길이 (start + length)만큼 저장되어있음 */
 	unsigned magic;                     /* Magic number. */
-	uint32_t unused[125];               /* Not used. */
+	uint32_t unused[125];               /* 512byte를 맞춰주기 위한 쓰지않는 공간. */
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -27,13 +32,17 @@ bytes_to_sectors (off_t size) {
 }
 
 /* In-memory inode. */
+/*
+	메모리 공간 상에 들어있는 노드
+	디스크 상 위치, 열린 횟수, 삭제됬는지 아닌지, write해도 되는지
+	디스크상의 메타 데이터 정보도 들어있음. */
 struct inode {
-	struct list_elem elem;              /* Element in inode list. */
-	disk_sector_t sector;               /* Sector number of disk location. */
-	int open_cnt;                       /* Number of openers. */
-	bool removed;                       /* True if deleted, false otherwise. */
-	int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-	struct inode_disk data;             /* Inode content. */
+	struct list_elem elem;              /* inode list를 위한 element. */
+	disk_sector_t sector;               /* 디스크 상의 섹터 위치. */
+	int open_cnt;                       /* 열렸던 횟수 기록. */
+	bool removed;                       /* 삭제됬다면 True 아니면 False. */
+	int deny_write_cnt;                 /* 0이면 써도됨, 아니면 안됨. */
+	struct inode_disk data;             /* 디스크에 저장된 메타데이터 정보보. */
 };
 
 /* Returns the disk sector that contains byte offset POS within
