@@ -94,6 +94,12 @@ struct thread {
 	int64_t start;     // 시작 시간
 	int64_t wakeup;    // 일어나는 시간
 
+    // donation 인자
+    int original_priority;            // 사용자가 설정한 원래 우선순위
+    struct list donations;            // 나에게 우선순위를 기부한 스레드들의 리스트
+    struct list_elem donation_elem;   // 내가 다른 스레드의 donations 리스트에 들어갈 때 사용
+    struct lock *waiting_lock;        // 내가 현재 기다리고 있는 락
+
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
