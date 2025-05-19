@@ -1,8 +1,3 @@
-/* x86-64는 세그먼트화된 아키텍처입니다. 
-   GDT(Global Descriptor Table)는 사용 중인 세그먼트를 설명하는 테이블입니다. 
-   이 파일들이 GDT를 설정합니다. 어떤 프로젝트에서도 이 파일들을 수정할 필요는 없습니다. 
-   GDT 작동 방식에 관심이 있다면 코드를 읽어보세요. */
-
 #include "userprog/gdt.h"
 #include <debug.h>
 #include "userprog/tss.h"
