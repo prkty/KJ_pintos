@@ -42,7 +42,7 @@ struct inode {
 	int open_cnt;                       /* 열렸던 횟수 기록. */
 	bool removed;                       /* 삭제됬다면 True 아니면 False. */
 	int deny_write_cnt;                 /* 0이면 써도됨, 아니면 안됨. */
-	struct inode_disk data;             /* 디스크에 저장된 메타데이터 정보보. */
+	struct inode_disk data;             /* 디스크에 저장된 메타데이터 정보. */
 };
 
 /* Returns the disk sector that contains byte offset POS within

@@ -49,9 +49,10 @@ process_create_initd (const char *file_name) {
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
+	/* fn_copy에 file_name을 PGSIZE(4kb) 만큼 복사한다.*/
 	strlcpy (fn_copy, file_name, PGSIZE);
 
-	/* FILE_NAME을 실행하기 위해 새로운 스레드를 만듭니다. */
+	/* FILE_NAME을 실행하기 위해 새로운 스레드를 만든다. 이때 . */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
@@ -178,7 +179,9 @@ process_exec (void *f_name) {
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
-
+	
+	// 디버깅용
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 	/* 전환 프로세스를 시작합니다. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -195,8 +198,12 @@ process_exec (void *f_name) {
  * 현재로서는 아무 작업도 수행하지 않습니다. */
 int
 process_wait (tid_t child_tid UNUSED) {
+
+	/*12312312312312312312*/
 	/* XXX: Hint) pintos는 process_wait(initd)가 발생하면 종료되므로,
 	 * XXX:       process_wait를 구현하기 전에 여기에 무한 루프를 추가하는 것이 좋습니다. */
+	//while(true){};
+	for(int i =0; i<2000000000; i++){}
 	return -1;
 }
 
@@ -267,31 +274,31 @@ process_activate (struct thread *next) {
 /* 실행 파일 헤더입니다. [ELF1] 1-4부터 1-8까지를 참조하세요.
  * ELF 바이너리의 맨 처음에 나타납니다. */
 struct ELF64_hdr {
-	unsigned char e_ident[EI_NIDENT];
-	uint16_t e_type;
-	uint16_t e_machine;
-	uint32_t e_version;
-	uint64_t e_entry;
-	uint64_t e_phoff;
-	uint64_t e_shoff;
-	uint32_t e_flags;
-	uint16_t e_ehsize;
-	uint16_t e_phentsize;
-	uint16_t e_phnum;
-	uint16_t e_shentsize;
-	uint16_t e_shnum;
-	uint16_t e_shstrndx;
+    unsigned char e_ident[EI_NIDENT]; /* ELF 식별 정보 (매직 넘버, 클래스, 데이터 인코딩, 버전 등)를 담는 배열 */
+    uint16_t      e_type;             /* 오브젝트 파일의 타입 (예: 실행 파일, 재배치 가능 파일, 공유 오브젝트 등) */
+    uint16_t      e_machine;          /* 필요한 아키텍처 (예: x86, x86-64, ARM 등) */
+    uint32_t      e_version;          /* 오브젝트 파일의 버전 */
+    uint64_t      e_entry;            /* 프로그램 실행 시작점의 가상 주소 (실행 파일인 경우) */
+    uint64_t      e_phoff;            /* 프로그램 헤더 테이블의 파일 내 오프셋 (바이트 단위) */
+    uint64_t      e_shoff;            /* 섹션 헤더 테이블의 파일 내 오프셋 (바이트 단위) */
+    uint32_t      e_flags;            /* 프로세서별 플래그 */
+    uint16_t      e_ehsize;           /* ELF 헤더의 크기 (바이트 단위) */
+    uint16_t      e_phentsize;        /* 프로그램 헤더 테이블의 한 항목(entry)의 크기 (바이트 단위) */
+    uint16_t      e_phnum;            /* 프로그램 헤더 테이블의 항목(entry) 개수 */
+    uint16_t      e_shentsize;        /* 섹션 헤더 테이블의 한 항목(entry)의 크기 (바이트 단위) */
+    uint16_t      e_shnum;            /* 섹션 헤더 테이블의 항목(entry) 개수 */
+    uint16_t      e_shstrndx;         /* 섹션 이름 문자열 테이블(section name string table)이 있는 섹션 헤더 테이블의 인덱스 */
 };
 
 struct ELF64_PHDR {
-	uint32_t p_type;
-	uint32_t p_flags;
-	uint64_t p_offset;
-	uint64_t p_vaddr;
-	uint64_t p_paddr;
-	uint64_t p_filesz;
-	uint64_t p_memsz;
-	uint64_t p_align;
+    uint32_t p_type;    /* 이 프로그램 헤더 항목이 설명하는 세그먼트의 타입 */
+    uint32_t p_flags;   /* 세그먼트 관련 플래그 (예: 읽기/쓰기/실행 권한) */
+    uint64_t p_offset;  /* 파일의 시작부터 이 세그먼트의 첫 바이트까지의 오프셋 (파일 내 위치) */
+    uint64_t p_vaddr;   /* 메모리에서 이 세그먼트의 첫 바이트가 위치할 가상 주소 */
+    uint64_t p_paddr;   /* 물리 메모리 주소 (물리 주소 지정이 관련된 시스템에서 사용, 보통 무시됨) */
+    uint64_t p_filesz;  /* 파일 이미지에서 이 세그먼트가 차지하는 크기 (바이트 단위) */
+    uint64_t p_memsz;   /* 메모리에서 이 세그먼트가 차지하는 크기 (바이트 단위) */
+    uint64_t p_align;   /* 세그먼트가 메모리와 파일에서 정렬되어야 하는 방식 (2의 거듭제곱 값) */
 };
 
 /* 약어 */
@@ -317,16 +324,27 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	// 문자 저장할 문자열
+	char *argv[128], *save_ptr, *token;
+	int argc = 0;
+	printf("filename: %s\n", file_name);
+	for(argv[argc] = strtok_r(file_name, " ", &save_ptr); argv[argc] != NULL; 
+		argv[argc] = strtok_r(NULL, " ", &save_ptr)){
+		printf("argv[%d]: %s\n", argc, argv[argc]);
+		argc++;
+	}
+
+
 	/* 페이지 디렉토리를 할당하고 활성화합니다. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
 
-	/* 실행 파일을 엽니다. */
-	file = filesys_open (file_name);
+	/* 실행 파일을 엽니다. 1312312312*/
+	file = filesys_open (argv[0]);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", argv[0]);
 		goto done;
 	}
 
@@ -394,25 +412,50 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
+	
 	/* 스택 설정. */
 	if (!setup_stack (if_))
 		goto done;
-
+	
 	/* 시작 주소. */
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: 코드를 여기에 입력하세요.
-	 * TODO: 인수 전달을 구현합니다. (project2/argument_passing.html 참조) */
-
+	
+	/* 스택에 인자들 저장 */
+	argument_to_stack(if_, argc, &argv);
 	success = true;
-
 done:
 	/* 우리는 화물이 성공적으로 도착하든 실패하든 여기에 도착합니다. */
 	file_close (file);
 	return success;
 }
 
+void argument_to_stack(struct intr_frame *if_, int argc, char ** argv){
+	uintptr_t addrlist[128];
+	for(int j = argc - 1; j >= 0; j--){
+		if_ -> rsp -= strlen(argv[j]) + 1;
+		memcpy(if_->rsp, argv[j], strlen(argv[j]) + 1);
+		addrlist[j] = (char *)if_->rsp;
+	}
+
+	/*dcggfsdfghsdhgdghfdg*/
+	uintptr_t padding = if_->rsp % 16;
+	if_->rsp -= padding;
+	memset((char *)if_->rsp, 0, padding);
+
+	argv[argc] = 0;
+	addrlist[argc] = NULL;
+	for(int j = argc; j>= 0; j--){
+		if_ -> rsp -= sizeof(char *);
+		memcpy(if_->rsp, &addrlist[j], sizeof(char *));
+	}
+	/* %rsi에 argv[0]의 주소, %rsi에 argc값 저장*/
+	if_ -> R.rdi = argc;
+	if_ -> R.rsi = if_->rsp;
+	if_->rsp -= sizeof(void *);
+	memset((void *)if_->rsp, 0, sizeof(void *));
+
+}
 
 /* PHDR이 FILE에 유효하고 로드 가능한 세그먼트를 설명하는지 확인하고, 
  * 그렇다면 true를 반환하고, 그렇지 않으면 false를 반환합니다. */
