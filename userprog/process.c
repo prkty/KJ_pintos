@@ -197,6 +197,8 @@ process_exec (void *f_name) {
 
 	palloc_free_page (cmdline);
 	
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+
 	/* 전환 프로세스를 시작합니다. */
 	do_iret (&_if);
 	NOT_REACHED ();

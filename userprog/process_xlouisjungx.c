@@ -172,28 +172,11 @@ process_exec (void *f_name) {
 	/* 우리는 먼저 현재 컨텍스트를 죽입니다 */
 	process_cleanup ();
 
-	/* 명령어 줄 복사 및 파싱 준비 */
-	
-	/*
-	
-	cmdline이 하는일이 무엇인가?
-	- 원래 인자 문자열 복사
-	- 공백 기준으로 인자 분리
-	- 메모리 해제
-
-	cmdline = "args-single\0onearg\0..."
-	argv[0] = &cmdline[0];        // "args-single"
-	argv[1] = &cmdline[11];       // "onearg"
-	argc = 2;
-	
-	*/
-
 	char *cmdline = palloc_get_page(0);
 	if(cmdline == NULL) return -1;
 
 	strlcpy(cmdline, file_name, PGSIZE);
 
-	/* 인자 파싱 */
 	char *argv_list[64];
 	int cnt = 0; // argc
 	char *token, *save_ptr;
@@ -210,27 +193,18 @@ process_exec (void *f_name) {
 		return -1;
 	}
 
-	/* 사용자 스택에 인자 설정 */
 	argument_stack(argv_list, cnt, &_if);
 
-	/* cmdline 메모리 해제(argv들은 사용자 스택에 있다.) */
 	palloc_free_page (cmdline);
 	
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+
 	/* 전환 프로세스를 시작합니다. */
 	do_iret (&_if);
 	NOT_REACHED ();
 }
 
-// 인자를 유저 스택으로 보내는 함수
 void argument_stack(char **argv, int argc, struct intr_frame *if_) {
-	/*
-
-	argv: 각 인자를 담은 문자열 포인터 배열 ("ls", "-l", "foo")
-	argc: 인자의 개수
-	if_ : 현재 유저 프로세스의 interrupt frame(rsp, rdi, rsi 등을 설정하는 곳)
-	
-	*/
-
 	char *arg_addr[argc];
 	int arg_len;
 
@@ -249,11 +223,9 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) {
 		memset(if_->rsp, 0, padding);
 	}
 
-	// argv[argc] = NULL을 스택에 삽입
 	if_->rsp -= sizeof(char *);
 	*(char **)if_->rsp = NULL;
-
-	// Push reverse Addresses of argv[i] 
+ 
 	for(int i = argc - 1; i >= 0; i--) {
 		if_->rsp -= sizeof(char *);
 		memcpy(if_->rsp, &arg_addr[i], sizeof(char *));
@@ -261,11 +233,9 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) {
 
 	char **argv_addr = (char **)if_->rsp;
 
-	// Push argc
 	if_->rsp -= sizeof(int);
 	*(int *)if_->rsp = argc;
 
-	// Push Fake Address
 	if_->rsp -= sizeof(void *);
     *(void **)if_->rsp = 0;
 
@@ -283,7 +253,6 @@ void argument_stack(char **argv, int argc, struct intr_frame *if_) {
  * 이 함수는 문제 2-2에서 구현될 것입니다.
  * 현재로서는 아무 작업도 수행하지 않습니다. */
 
-// 수정할 함수
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) pintos는 process_wait(initd)가 발생하면 종료되므로,
