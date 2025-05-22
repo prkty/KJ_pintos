@@ -464,6 +464,13 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->original_priority = priority;
 	t->waiting_lock = NULL;
 	t->having_locks = 0;
+// #ifdef USERPROG
+// 	/* 파일 디스크립터 */
+// 	t-> fdt[0] = 0;
+// 	t-> fdt[1] = 1;
+// 	t-> fdt[2] = 2;
+
+// #endif
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

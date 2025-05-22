@@ -100,15 +100,14 @@ typedef int tid_t;
 	struct list_elem donation_elem;  	/* donations 리스트용 elem */
 	int having_locks;					/* 현재 쓰레드가 락을 가지고 있는지 아닌지 확인용 */
 
-	int fd;
-	struct file **fdt;					/* 파일 디스크립터 테이블 */	
-	struct file *run_file;				/* 사용중인 파일 */	
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+	// struct file **fdt;
+	// int fd_idx;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

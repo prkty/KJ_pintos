@@ -333,8 +333,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf("argv[%d]: %s\n", argc, argv[argc]);
 		argc++;
 	}
-
-
+	printf("argv[%d]: %s\n", argc, argv[argc]);
 	/* 페이지 디렉토리를 할당하고 활성화합니다. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -342,9 +341,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* 실행 파일을 엽니다. 1312312312*/
-	file = filesys_open (argv[0]);
+	file = filesys_open (file_name);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", argv[0]);
+		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
@@ -437,7 +436,7 @@ void argument_to_stack(struct intr_frame *if_, int argc, char ** argv){
 		memcpy(if_->rsp, argv[j], strlen(argv[j]) + 1);
 		addrlist[j] = (char *)if_->rsp;
 	}
-
+	printf("%d\n", if_-> rsp);
 	/*dcggfsdfghsdhgdghfdg*/
 	uintptr_t padding = if_->rsp % 16;
 	if_->rsp -= padding;
@@ -454,8 +453,9 @@ void argument_to_stack(struct intr_frame *if_, int argc, char ** argv){
 	if_ -> R.rsi = if_->rsp;
 	if_->rsp -= sizeof(void *);
 	memset((void *)if_->rsp, 0, sizeof(void *));
-
+	printf("%d\n", if_-> rsp);
 }
+
 
 /* PHDR이 FILE에 유효하고 로드 가능한 세그먼트를 설명하는지 확인하고, 
  * 그렇다면 true를 반환하고, 그렇지 않으면 false를 반환합니다. */

@@ -55,6 +55,10 @@
         "cinttypes": "c",
         "cstdbool": "c",
         "random": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "off_t.h": "c",
+        "thread.h": "c",
+        "init.h": "c",
+        "vaddr.h": "c"
     }
 }

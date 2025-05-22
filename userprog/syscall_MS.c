@@ -12,15 +12,25 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "filesys/file.h"
-#include "init.h"
-#include "process.h"
-
-typedef __pid_t pid_t;
+#include "vaddr.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 void halt(void);
-pid_t fork(const char *thread_name);
+// pid_t fork(const char *thread_name);
+int exec(const char *cmd_line);
+// int wait(pid_t pid);
+bool create(const char *file, unsigned initial_size);
+int open(const char *file);
+int filesize (int fd);
+int read(int fd, void *buffer, unsigned size);
+int write(int fd, const void *buffer, unsigned size);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+
+void is_user_memory(void * addr);
+
 /* 시스템 콜.
  *
  * 이전에는 시스템 호출 서비스가 인터럽트 핸들러(예: 리눅스의 int 0x80)에 의해 처리되었습니다.
@@ -51,8 +61,8 @@ void
 syscall_handler (struct intr_frame *f) {
 
 	uint64_t sc_number = f -> R.rax;
-	uintptr_t *sp = f -> rsp;
-	uintptr_t *si = f -> R.rsi;
+	// uintptr_t *sp = f -> rsp;
+	// uintptr_t *si = f -> R.rsi;
 	int size = (int)f -> R.rdi;
 	switch(sc_number){
 		case SYS_HALT:
@@ -73,10 +83,10 @@ syscall_handler (struct intr_frame *f) {
 		case SYS_FILESIZE:
 			break;
 		case SYS_READ:
-			read(sc_number, si, size);
+			// read(sc_number, si, size);
 			break;
 		case SYS_WRITE:
-			write(sc_number, si, size);
+			//f->R.rax = write((int)f->R.rdi, (void *)f->R.rsi, (unsigned)f->R.rdx);
 			break;
 		case SYS_SEEK:
 			break;
@@ -84,10 +94,10 @@ syscall_handler (struct intr_frame *f) {
 			break;
 		case SYS_CLOSE:
 			break;
+		default:
+			thread_exit();
 	}
 
-	printf ("system call!\n");
-	thread_exit ();
 }
 
 void halt(void){
@@ -99,17 +109,17 @@ void exit(int status){
 	return status;
 }
 
-__pid_t fork(const char *thread_name){
+// pid_t fork(const char *thread_name){
 
-}
+// }
 
 int exec(const char *cmd_line){
 
 }
 
-int wait(__pid_t pid){
+// int wait(pid_t pid){
 
-}
+// }
 
 bool create(const char *file, unsigned initial_size){
 
@@ -126,17 +136,15 @@ int filesize (int fd){
 int read(int fd, void *buffer, unsigned size){
 	is_user_memory(buffer);
 	struct thread *curr = thread_current(); 
-	struct file *f = curr->fdt[fd];
+	// struct file *f = curr->fdt[fd];
 	
 }
 
 int write(int fd, const void *buffer, unsigned size){
 	is_user_memory(buffer);
-	struct thread *curr = thread_current(); 
-	struct file *f = curr->fdt[fd];
-	
-	if(fd == 0){
-		f->deny_write
+	if(fd == 1){
+		putbuf(buffer, size);
+		return size;
 	}
 }
 
@@ -152,6 +160,10 @@ void close (int fd){
 
 }
 
-void is_user_memory(void * addr){
-	ASSERT((uintptr_t) addr - (uintptr_t)KERN_BASE < 0);
+void is_user_memory(uint64_t * addr){
+	struct thread *cur = thread_current();
+
+	if(addr == NULL || !(is_user_vaddr(addr))){
+		exit(-1);
+	}
 }
