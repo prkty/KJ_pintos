@@ -215,19 +215,19 @@ thread_create (const char *name, int priority,
 	tid = t->tid = allocate_tid ();
 
 	// #define USERPROG
-	// /** project2-System Call */
-    // t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
-    // if (t->fdt == NULL)
-    //     return TID_ERROR;
+	/** project2-System Call */
+    t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
+    if (t->fdt == NULL)
+        return TID_ERROR;
 
-    // t->exit_status = 0; 
+    t->exit_status = 0; 
 
-    // t->fd_idx = 3;
-    // t->fdt[0] = STDIN;   
-    // t->fdt[1] = STDOUT; 
-    // t->fdt[2] = STDERR;  
+    t->fd_idx = 3;
+    t->fdt[0] = 0;   
+    t->fdt[1] = 1; 
+    t->fdt[2] = 2;  
 	
-    // list_push_back(&thread_current()->child_list, &t->child_elem);
+    list_push_back(&thread_current()->child_list, &t->child_elem);
 // #endif
 
 	/* Call the kernel_thread if it scheduled.
@@ -511,7 +511,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 #ifdef USERPROG
 	/** project2-System Call */
     t->runn_file = NULL;
-
+	
     list_init(&t->child_list);
     sema_init(&t->fork_sema, 0);
     sema_init(&t->exit_sema, 0);

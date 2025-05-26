@@ -36,7 +36,7 @@ typedef int tid_t;
 /** project2-System Call */
 #define FDT_PAGES     3                     // test `multi-oom` 테스트용
 #define FDCOUNT_LIMIT FDT_PAGES * (1 << 9)  // 엔트리가 512개 인 이유: 페이지 크기 4kb / 파일 포인터 8byte
-
+#define FD_MAX 128
 
 /* A kernel thread or user process.
  *
@@ -119,6 +119,7 @@ struct thread {
 	
 
 #define USERPROG
+#ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 	/** project2-System Call */
@@ -135,7 +136,8 @@ struct thread {
 	struct semaphore fork_sema;  // fork가 완료될 때 signal
     struct semaphore exit_sema;  // 자식 프로세스 종료 signal
     struct semaphore wait_sema;  // exit_sema를 기다릴 때 사용
-// #endif
+	int next_fd;
+#endif
 
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

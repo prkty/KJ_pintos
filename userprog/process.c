@@ -197,7 +197,7 @@ process_exec (void *f_name) {
 
 	palloc_free_page (cmdline);
 	
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	//hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	/* 전환 프로세스를 시작합니다. */
 	do_iret (&_if);
@@ -259,7 +259,7 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       process_wait를 구현하기 전에 여기에 무한 루프를 추가하는 것이 좋습니다. */
 
 	//while(1) {}
-	for(int i=0; i<200000000; i++){}
+	for(int i=0; i<2000000000; i++){}
 	return -1;
 }
 
@@ -271,7 +271,17 @@ process_exit (void) {
 	 * TODO: 프로세스 종료 메시지를 구현하세요(project2/process_termination.html 참조).
 	 * TODO: 여기에 프로세스 리소스 정리를 구현하는 것이 좋습니다. */
 
+	// for(int fd = 0; fd < curr->fd_idx; fd++)
+	// close(fd);
+
+	file_close(curr->runn_file);
+
+	palloc_free_multiple(curr->fdt, FDT_PAGES);
+
 	process_cleanup ();
+
+	sema_up(&curr->wait_sema);
+	sema_down(&curr->exit_sema);
 }
 
 /* 현재 프로세스의 리소스를 해제합니다. */
