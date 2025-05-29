@@ -59,6 +59,18 @@
         "off_t.h": "c",
         "thread.h": "c",
         "init.h": "c",
-        "vaddr.h": "c"
+        "vaddr.h": "c",
+        "stdio.h": "c",
+        "string.h": "c",
+        "*.inc": "c",
+        "list.h": "c",
+        "thread": "c",
+        "synch.h": "c",
+        "filesys.h": "c",
+        "gdt.h": "c",
+        "loader.h": "c",
+        "malloc.h": "c",
+        "debug.h": "c",
+        "inode.h": "c"
     }
 }

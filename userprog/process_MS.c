@@ -1,6 +1,7 @@
 /* ELF 바이너리를 로드하고 프로세스를 시작합니다. */
 
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -19,6 +20,7 @@
 #include "threads/thread.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -28,6 +30,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+struct thread* pid_to_thread(tid_t child_tid);
 
 /* initd 및 기타 프로세스를 위한 일반 프로세스 초기화 프로그램입니다. */
 static void
@@ -53,9 +56,17 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	/* FILE_NAME을 실행하기 위해 새로운 스레드를 만든다. 이때 . */
+
+	/* 이름 추가 */
+	char *save_ptr;
+	strtok_r(file_name, " ", &save_ptr);
+	
+	/*  */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
+
+	
 	return tid;
 }
 
@@ -76,10 +87,34 @@ initd (void *f_name) {
 /* 현재 프로세스를 `name`으로 복제합니다. 새 프로세스의 스레드 ID를 반환하거나,
  * 스레드를 생성할 수 없는 경우 TID_ERROR를 반환합니다. */
 tid_t
-process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+process_fork (const char *name, struct intr_frame *if_) {
 	/* 현재 스레드를 새 스레드로 복제합니다.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	enum intr_level old_level;
+	old_level = intr_disable();
+	struct thread *curr = thread_current();
+
+	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
+	tid_t child_id = thread_create (name, PRI_DEFAULT, __do_fork, curr);
+
+	//printf("자식 쓰레드 ID : %d\n", &child_thread -> tid);
+	if(child_id == NULL){
+		return TID_ERROR;
+	}
+	
+	struct thread *child_thread = pid_to_thread(child_id);
+	child_thread -> parent_thread = curr;
+	// printf("Current_Thread PID : %d\n", curr -> tid);
+	// printf("fork_Child_Thread PID : %d\n", child_thread -> tid);
+	// printf("fork_child_Thread status : %d\n", child_thread -> status);
+	// printf("Before fork_sema : DOWN \n");
+	intr_set_level(old_level);
+	sema_down(&child_thread->fork_sema);
+	// printf("After fork_sema : DOWN \n");
+
+	if(child_thread->exit_status == -1)
+		return TID_ERROR;
+	//printf("After fork_sema : DOWN \n");
+	return child_id;
 }
 
 #ifndef VM
@@ -87,25 +122,44 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
  * 이는 프로젝트 2에만 적용됩니다. */
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
+	
 	struct thread *current = thread_current ();
 	struct thread *parent = (struct thread *) aux;
 	void *parent_page;
 	void *newpage;
 	bool writable;
-
+	
 	/* 1. TODO: parent_page가 커널 페이지인 경우 즉시 반환합니다. */
-
+	if (!is_user_vaddr(va)) {
+    return true;
+	}
 	/* 2. 부모 페이지 맵 레벨 4에서 VA 해결합니다. */
-	parent_page = pml4_get_page (parent->pml4, va);
+	
+	parent_page = pml4_get_page (parent->pml4, va); /* */
+	/* → parent 프로세스의 가상주소 va가 가리키는 “실제 물리 페이지”를
+	커널 가상 주소로 변환한 뒤 parent_page에 담거나,
+	매핑이 없으면 NULL을 담는다. */
 
+	if(parent_page == NULL){
+		printf("[fork-duplicate] fail. parent.\n");
+		return false;
+	}
+		
 	/* 3. TODO: 자식 페이지에 새로운 PAL_USER 페이지를 할당하고 결과를 NEWPAGE로 설정합니다. */
-
+	newpage = palloc_get_page(PAL_USER);
+	if(newpage == NULL){
+		printf("[fork-duplicate] fail. new page.\n");
+		return false;
+	}
 	/* 4. TODO: 부모 페이지를 새 페이지에 복제하고 부모 페이지가 
 	 * 쓰기 가능한지 확인합니다(결과에 따라 WRITABLE로 설정합니다). */
-
+	writable = is_writable(pte);
+	memcpy(newpage, parent_page, PGSIZE);
 	/* 5. WRITABLE 권한을 가지고 VA 주소의 자식 페이지 테이블에 새 페이지를 추가합니다. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: 페이지 삽입에 실패하면 오류 처리를 수행합니다. */
+		printf("[fork-duplicate] fail. page insert\n");
+		return false;
 	}
 	return true;
 }
@@ -120,17 +174,18 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: 어떻게든 parent_if를 전달합니다. (즉, process_fork()의 if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent -> parent_if;
+	/* TODO */
 	bool succ = true;
-
+	
 	/* 1. CPU 컨텍스트를 로컬 스택으로 읽습니다. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-
+	if_.R.rax = 0;
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
 		goto error;
-
+	
 	process_activate (current);
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
@@ -145,9 +200,18 @@ __do_fork (void *aux) {
 	 * TODO: 힌트) 파일 객체를 복제하려면 include/filesys/file.h에서 `file_duplicate`를 사용하세요.
 	 * TODO:       이 함수가 부모의 리소스를 성공적으로 복제할 때까지
 	 * TODO:       부모는 fork()에서 반환되어서는 안 됩니다. */
+	
+	for(int i = 3; i < 64; i++){
+		if(parent->fdt[i] != NULL){
+			current -> fdt[i] = file_duplicate(parent -> fdt[i]);
+		}
+	}
 
-	process_init ();
-
+	/* TODO */
+	// process_init ();
+	// printf("Before fork_sema : UP \n");
+	sema_up(&current->fork_sema);
+	// printf("After fork_sema : UP \n");
 	/* 마지막으로 새로 만든 프로세스로 전환합니다. */
 	if (succ)
 		do_iret (&if_);
@@ -174,15 +238,17 @@ process_exec (void *f_name) {
 
 	/* 그리고 바이너리를 로드합니다 */
 	success = load (file_name, &_if);
-
 	/* 로드에 실패하면 종료합니다. */
 	palloc_free_page (file_name);
-	if (!success)
+	if (!success){
 		return -1;
+	}
 	
 	// 디버깅용
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
-	/* 전환 프로세스를 시작합니다. */
+	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	// 전환 프로세스를 시작합니다.
+
+	
 	do_iret (&_if);
 	NOT_REACHED ();
 }
@@ -197,14 +263,37 @@ process_exec (void *f_name) {
  * 이 함수는 문제 2-2에서 구현될 것입니다.
  * 현재로서는 아무 작업도 수행하지 않습니다. */
 int
-process_wait (tid_t child_tid UNUSED) {
+process_wait (tid_t child_tid) {
+	struct thread *curr = thread_current();				// 부모 쓰레드
+	struct thread *child_thread = NULL;					// 자식 쓰레드
+	struct list_elem* e;
+	// printf("부모 쓰레드의 PID : %d\n", curr -> tid);
+	for(e = list_begin(&curr->child_list); e != list_end(&curr->child_list); e = list_next(e)){
+		struct thread *t = list_entry(e, struct thread, fork_elem);
+		if(t-> tid == child_tid){
+			child_thread = t;
+			// printf("포크가 됬다.\n");
+			break; 
+		}
+	}
+	if(child_thread == NULL){
+		// printf("child_thread = NULL\n");
+		return -1;
+	}
+	
+	// printf("자식 쓰레드의 PID : %d\n", child_thread -> tid);
+	// printf("Before PID : %d, waiting_sema : DOWN \n", curr->tid);
+	sema_down(&child_thread->waiting_sema);
+	// printf("After PID : %d, waiting_sema : DOWN \n", curr->tid);
 
-	/*12312312312312312312*/
 	/* XXX: Hint) pintos는 process_wait(initd)가 발생하면 종료되므로,
 	 * XXX:       process_wait를 구현하기 전에 여기에 무한 루프를 추가하는 것이 좋습니다. */
-	//while(true){};
-	for(int i =0; i<2000000000; i++){}
-	return -1;
+
+	int status = child_thread -> exit_status;
+	// printf("Child status : %d\n", child_thread -> exit_status);
+	list_remove(&child_thread -> fork_elem);
+	sema_up(&child_thread -> free_sema);
+	return status;
 }
 
 /* 프로세스를 종료합니다. 이 함수는 thread_exit()에 의해 호출됩니다. */
@@ -215,7 +304,16 @@ process_exit (void) {
 	 * TODO: 프로세스 종료 메시지를 구현하세요(project2/process_termination.html 참조).
 	 * TODO: 여기에 프로세스 리소스 정리를 구현하는 것이 좋습니다. */
 
+	//printf("Before waiting_sema : UP \n");
+	
+	// printf("after waiting_sema : UP \n");
+	// sema_down(&curr->free_sema);
 	process_cleanup ();
+
+	//printf("Before waiting_sema : UP \n");
+	sema_up(&curr->waiting_sema);
+	// printf("after waiting_sema : UP \n");
+	sema_down(&curr->free_sema);
 }
 
 /* 현재 프로세스의 리소스를 해제합니다. */
@@ -325,16 +423,17 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 
 	// 문자 저장할 문자열
-	char *argv[128], *save_ptr, *token;
+	char *argv[64], *save_ptr, *token;
 	int argc = 0;
-	printf("filename: %s\n", file_name);
+	// printf("filename: %s\n", file_name);
 	for(argv[argc] = strtok_r(file_name, " ", &save_ptr); argv[argc] != NULL; 
 		argv[argc] = strtok_r(NULL, " ", &save_ptr)){
-		printf("argv[%d]: %s\n", argc, argv[argc]);
+		// printf("argv[%d]: %s\n", argc, argv[argc]);
 		argc++;
 	}
 
-
+	file_name = argv[0];
+	// printf("argv[%d]: %s\n", argc, argv[argc]);
 	/* 페이지 디렉토리를 할당하고 활성화합니다. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -343,11 +442,16 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* 실행 파일을 엽니다. 1312312312*/
 	file = filesys_open (argv[0]);
+
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", argv[0]);
 		goto done;
 	}
 
+	/* rox 할 때 */
+	t->running_file = file;
+	file_deny_write(file);
+	/* rox 할 때 */
 	/* 실행 가능한 헤더를 읽고 검증합니다. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -426,19 +530,20 @@ load (const char *file_name, struct intr_frame *if_) {
 	success = true;
 done:
 	/* 우리는 화물이 성공적으로 도착하든 실패하든 여기에 도착합니다. */
-	file_close (file);
+	// file_close (file);
+	// printf("success : %d\n",success);
 	return success;
 }
 
 void argument_to_stack(struct intr_frame *if_, int argc, char ** argv){
-	uintptr_t addrlist[128];
+	uintptr_t addrlist[64];
 	for(int j = argc - 1; j >= 0; j--){
 		if_ -> rsp -= strlen(argv[j]) + 1;
 		memcpy(if_->rsp, argv[j], strlen(argv[j]) + 1);
 		addrlist[j] = (char *)if_->rsp;
 	}
-
-	/*dcggfsdfghsdhgdghfdg*/
+	
+	// printf("%d\n", if_-> rsp);
 	uintptr_t padding = if_->rsp % 16;
 	if_->rsp -= padding;
 	memset((char *)if_->rsp, 0, padding);
@@ -449,13 +554,14 @@ void argument_to_stack(struct intr_frame *if_, int argc, char ** argv){
 		if_ -> rsp -= sizeof(char *);
 		memcpy(if_->rsp, &addrlist[j], sizeof(char *));
 	}
-	/* %rsi에 argv[0]의 주소, %rsi에 argc값 저장*/
+	/* %rsi에 argv[0]의 주소, %rdi에 argc값 저장*/
 	if_ -> R.rdi = argc;
 	if_ -> R.rsi = if_->rsp;
 	if_->rsp -= sizeof(void *);
 	memset((void *)if_->rsp, 0, sizeof(void *));
-
+	// printf("rsp = %p\n", (void *) if_->rsp);
 }
+
 
 /* PHDR이 FILE에 유효하고 로드 가능한 세그먼트를 설명하는지 확인하고, 
  * 그렇다면 true를 반환하고, 그렇지 않으면 false를 반환합니다. */
@@ -589,6 +695,19 @@ install_page (void *upage, void *kpage, bool writable) {
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
+
+struct thread* pid_to_thread(tid_t child_tid){
+	struct thread *curr = thread_current();				// 부모 쓰레드
+	struct list_elem* e;
+	for(e = list_begin(&curr->child_list); e != list_end(&curr->child_list); e = list_next(e)){
+		struct thread *t = list_entry(e, struct thread, fork_elem);
+		if(t-> tid == child_tid){
+			// printf("여기서 t->tid : %d\n", t->tid);
+			return t;
+		}
+	}
+}
+
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the

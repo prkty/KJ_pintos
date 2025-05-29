@@ -253,12 +253,11 @@ palloc_init (void) {
 	return ext_mem.end;
 }
 
-/* Obtains and returns a group of PAGE_CNT contiguous free pages.
-   If PAL_USER is set, the pages are obtained from the user pool,
-   otherwise from the kernel pool.  If PAL_ZERO is set in FLAGS,
-   then the pages are filled with zeros.  If too few pages are
-   available, returns a null pointer, unless PAL_ASSERT is set in
-   FLAGS, in which case the kernel panics. */
+/* PAGE_CNT개의 연속된 빈 페이지를 확보하여 그 시작 주소를 반환합니다.
+   FLAGS에 PAL_USER가 설정되어 있으면 사용자용 풀에서, 그렇지 않으면 커널용 풀에서 페이지를 가져옵니다.
+   FLAGS에 PAL_ZERO가 설정되어 있으면 할당된 페이지들을 0으로 초기화합니다.
+   사용 가능한 페이지가 부족하면 NULL을 반환합니다.
+   단, FLAGS에 PAL_ASSERT가 설정되어 있으면 페이지 부족 시 커널이 패닉합니다. */
 void *
 palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
 	struct pool *pool = flags & PAL_USER ? &user_pool : &kernel_pool;

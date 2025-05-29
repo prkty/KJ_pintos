@@ -55,12 +55,10 @@ pdpe_walk (uint64_t *pdpe, const uint64_t va, int create) {
 	return pte;
 }
 
-/* Returns the address of the page table entry for virtual
- * address VADDR in page map level 4, pml4.
- * If PML4E does not have a page table for VADDR, behavior depends
- * on CREATE.  If CREATE is true, then a new page table is
- * created and a pointer into it is returned.  Otherwise, a null
- * pointer is returned. */
+/* PML4에서 가상 주소 VADDR에 대응하는 페이지 테이블 엔트리의 주소를 반환합니다.
+ * 만약 PML4E에 VADDR용 페이지 테이블이 없으면 CREATE 값에 따라 동작이 달라집니다.
+ * CREATE가 true면 새 페이지 테이블을 생성하고 해당 테이블의 엔트리 주소를 반환하며,
+ * 그렇지 않으면 NULL 포인터를 반환합니다. */
 uint64_t *
 pml4e_walk (uint64_t *pml4e, const uint64_t va, int create) {
 	uint64_t *pte = NULL;
@@ -207,10 +205,9 @@ pml4_activate (uint64_t *pml4) {
 	lcr3 (vtop (pml4 ? pml4 : base_pml4));
 }
 
-/* Looks up the physical address that corresponds to user virtual
- * address UADDR in pml4.  Returns the kernel virtual address
- * corresponding to that physical address, or a null pointer if
- * UADDR is unmapped. */
+/* PML4에서 사용자 가상 주소 UADDR에 대응하는 물리 주소를 조회하여,
+ * 그 물리 주소에 매핑된 커널 가상 주소를 반환합니다.
+ * 만약 UADDR이 매핑되어 있지 않다면 NULL을 반환합니다. */
 void *
 pml4_get_page (uint64_t *pml4, const void *uaddr) {
 	ASSERT (is_user_vaddr (uaddr));
@@ -222,14 +219,11 @@ pml4_get_page (uint64_t *pml4, const void *uaddr) {
 	return NULL;
 }
 
-/* Adds a mapping in page map level 4 PML4 from user virtual page
- * UPAGE to the physical frame identified by kernel virtual address KPAGE.
- * UPAGE must not already be mapped. KPAGE should probably be a page obtained
- * from the user pool with palloc_get_page().
- * If WRITABLE is true, the new page is read/write;
- * otherwise it is read-only.
- * Returns true if successful, false if memory allocation
- * failed. */
+/* 사용자 가상 페이지 UPAGE에서 물리 프레임(커널 가상 주소 KPAGE)으로 가는
+ * PML4 매핑을 추가합니다. UPAGE는 아직 매핑되어 있어서는 안 되며,
+ * KPAGE는 palloc_get_page()로 사용자 풀에서 가져온 페이지여야 합니다.
+ * WRITABLE이 true면 읽기/쓰기 권한이 부여되고, 그렇지 않으면 읽기 전용입니다.
+ * 메모리 할당에 실패하면 false를, 성공하면 true를 반환합니다. */
 bool
 pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) {
 	ASSERT (pg_ofs (upage) == 0);

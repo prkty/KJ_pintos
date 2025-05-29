@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 #include "threads/interrupt.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -86,6 +87,7 @@ typedef int tid_t;
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
 
+
  struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
@@ -102,10 +104,23 @@ typedef int tid_t;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
-
-#define USERPROG
+	struct file **fdt;					/* 파일 디스크립터 리스트 */
+	int fd_idx;							/* 파일 디스크립터 인덱스*/
+	struct list child_list;				/* 자식 쓰레드 리스트 */
+	struct list_elem fork_elem;			/* 자식 쓰레드 리스트 엘리멘트 */
+	struct thread *parent_thread;				/* 부모 쓰레드 */
+	/* 여기 작업하고 있었음 */
+	int exit_status;
+	/* project 2 */
+	struct intr_frame parent_if;			/* 부모의 인터럽트 프레임 저장*/
+	struct semaphore waiting_sema;				/* 자식이 끝날때까지 wait 용 세마포어 */
+	struct semaphore fork_sema;				/* 2 */
+	struct semaphore free_sema;				/* 3 */
+	/* 여기까지 */
+#ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+#endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
 	struct supplemental_page_table spt;

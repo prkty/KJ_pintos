@@ -117,6 +117,9 @@ thread_init (void) {
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+	/**/
+	list_init(&initial_thread->child_list);
+	/**/
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -195,6 +198,19 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
+	/* 포크 구현할 때 쓴 코드 */
+	struct thread *cur = thread_current();
+	list_push_back(&cur->child_list, &t->fork_elem);
+
+	struct list_elem* e;
+	for(e = list_begin(&cur->child_list); e != list_end(&cur->child_list); e = list_next(e)){
+		struct thread *t1 = list_entry(e, struct thread, fork_elem);
+		if(t1-> tid == t->tid){
+			// printf("포크된 쓰레드 pid : %d\n", t->tid);
+			break; 
+		}
+	}
+	/* */
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
 	t->tf.rip = (uintptr_t) kernel_thread;
@@ -205,6 +221,18 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	#ifdef USERPROG
+	/* 파일 디스크립터 */
+		t -> fdt = calloc(64, sizeof(struct file *));
+		for(int i = 0; i < 64; i++){
+			t -> fdt[i] = NULL;
+		}
+		t-> fdt[0] = 0;
+		t-> fdt[1] = 1;
+
+		t-> fd_idx = 2;
+	#endif
 
 	/* 쓰레드를 레디큐에 올린다. */
 	thread_unblock (t);
@@ -464,13 +492,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->original_priority = priority;
 	t->waiting_lock = NULL;
 	t->having_locks = 0;
-// #ifdef USERPROG
-// 	/* 파일 디스크립터 */
-// 	t-> fdt[0] = 0;
-// 	t-> fdt[1] = 1;
-// 	t-> fdt[2] = 2;
 
-// #endif
+	list_init(&t->child_list);
+
+	sema_init(&t -> waiting_sema, 0);
+	sema_init(&t -> fork_sema, 0);
+	sema_init(&t -> free_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -490,7 +517,7 @@ next_thread_to_run (void) {
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(
-			"movq %0, %%rsp\n"
+			"movq %0, %%rsp\n"			/* 인자로 들어온 tf 의 주소를 rsp에 저장*/
 			"movq 0(%%rsp),%%r15\n"
 			"movq 8(%%rsp),%%r14\n"
 			"movq 16(%%rsp),%%r13\n"
@@ -505,12 +532,14 @@ do_iret (struct intr_frame *tf) {
 			"movq 88(%%rsp),%%rdx\n"
 			"movq 96(%%rsp),%%rcx\n"
 			"movq 104(%%rsp),%%rbx\n"
-			"movq 112(%%rsp),%%rax\n"
-			"addq $120,%%rsp\n"
-			"movw 8(%%rsp),%%ds\n"
-			"movw (%%rsp),%%es\n"
-			"addq $32, %%rsp\n"
-			"iretq"
+			"movq 112(%%rsp),%%rax\n"	/* tf의 레지스터 정보를 스택에 쌓는다. */
+			"addq $120,%%rsp\n"			/* 이후 rsp를 gp_register 값만큼 이동한다. */
+			"movw 8(%%rsp),%%ds\n"		/* rsp + 8의 값을 레지스터 ds에 저장한다.*/
+			"movw (%%rsp),%%es\n"		/* rsp 위치의 값을 레지스터 es에 저장한다. */
+			"addq $32, %%rsp\n"			/* rsp의 값을 32만큼 증가시켜서 rip를 가리키게 한다.*/
+			"iretq"					/* 	인터럽트 프레임의 rip 값을 복원해서 기존에 수행하던 스레드의 다음 명령을 실행한다.
+										만약 rip가 유저 프로세스의 rip 값을 가지고 있다면 CPU는 유저 프로세스의 다음 명령을 실행한다.										
+										이를 통해 커널모드 -> 유저모드로 복귀한다. */
 			: : "g" ((uint64_t) tf) : "memory");
 }
 
