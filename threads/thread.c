@@ -214,7 +214,7 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 	tid = t->tid = allocate_tid ();
 
-	// #define USERPROG
+	#ifdef USERPROG
 	/** project2-System Call */
     t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES);
     if (t->fdt == NULL)
@@ -228,7 +228,7 @@ thread_create (const char *name, int priority,
     t->fdt[2] = 2;  
 	
     list_push_back(&thread_current()->child_list, &t->child_elem);
-// #endif
+#endif
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
@@ -508,7 +508,8 @@ init_thread (struct thread *t, const char *name, int priority) {
     t->niceness = NICE_DEFAULT;
     t->recent_cpu = RECENT_CPU_DEFAULT;
 
-#ifdef USERPROG
+	t->exit_status = 0;
+
 	/** project2-System Call */
     t->runn_file = NULL;
 	
@@ -516,7 +517,6 @@ init_thread (struct thread *t, const char *name, int priority) {
     sema_init(&t->fork_sema, 0);
     sema_init(&t->exit_sema, 0);
     sema_init(&t->wait_sema, 0);
-#endif
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

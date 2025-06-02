@@ -17,13 +17,9 @@ void seek (int fd, unsigned position);
 unsigned tell (int fd);
 int read (int fd, void *buffer, unsigned size);
 void close (int fd);
+pid_t fork(const char *thread_name);
+int exec (const char *file);
 
 void check_address(void* addr);
-
-struct file * process_get_file(int fd);
-int process_add_file(struct file *file);
-int process_close_file(int fd);
-
-
 
 #endif /* userprog/syscall.h */

@@ -29,6 +29,52 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+struct file * process_get_file(int fd) {
+	struct thread *curr = thread_current();
+
+	if(fd < 3 || fd >= FDCOUNT_LIMIT) return -1;
+
+	if(fd < 2 || fd >= FDCOUNT_LIMIT || curr->fdt[fd] == NULL) return NULL;
+
+	return curr->fdt[fd];
+}
+
+int process_add_file(struct file *file) {
+	struct thread *curr = thread_current();
+	struct file **fdt = curr->fdt;
+
+	if (curr->fd_idx >= FDCOUNT_LIMIT)
+        return -1;
+
+    fdt[curr->fd_idx++] = file;
+
+    return curr->fd_idx - 1;
+}
+
+int process_close_file(int fd) {
+	struct thread *curr = thread_current();
+
+    if (fd >= FDCOUNT_LIMIT)
+        return -1;
+
+    curr->fdt[fd] = NULL;
+    return 0;
+}
+
+struct thread *get_child_process(int pid) {
+	struct thread *curr = thread_current();
+	struct thread *t;
+
+	for (struct list_elem *e = list_begin(&curr->child_list); e != list_end(&curr->child_list); e = list_next(e)) {
+		t = list_entry(e, struct thread, child_elem);
+
+		if(pid == t->tid) return t;
+	}
+
+	return NULL;
+}
+
+
 /* initd 및 기타 프로세스를 위한 일반 프로세스 초기화 프로그램입니다. */
 static void
 process_init (void) {
@@ -77,8 +123,22 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *curr = thread_current();
+
+	struct intr_frame *f = (pg_round_up(rrsp()) - sizeof(struct intr_frame));
+	memcpy(&curr->parent_if, f, sizeof(struct intr_frame));
+
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, curr);
+
+	if(tid == TID_ERROR) return TID_ERROR;
+
+	struct thread *child = get_child_process(tid);
+
+	sema_down(&child->fork_sema);
+
+	if(child->exit_status == TID_ERROR) return TID_ERROR;
+
+	return tid;
 }
 
 #ifndef VM
@@ -93,18 +153,25 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: parent_page가 커널 페이지인 경우 즉시 반환합니다. */
+	if(is_kernel_vaddr(va)) return true;
 
 	/* 2. 부모 페이지 맵 레벨 4에서 VA 해결합니다. */
 	parent_page = pml4_get_page (parent->pml4, va);
-
+	if(parent_page == NULL) return false;
+	
 	/* 3. TODO: 자식 페이지에 새로운 PAL_USER 페이지를 할당하고 결과를 NEWPAGE로 설정합니다. */
+	newpage = palloc_get_page(PAL_ZERO);
+	if(newpage == NULL) return false;
 
 	/* 4. TODO: 부모 페이지를 새 페이지에 복제하고 부모 페이지가 
 	 * 쓰기 가능한지 확인합니다(결과에 따라 WRITABLE로 설정합니다). */
-
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
+	
 	/* 5. WRITABLE 권한을 가지고 VA 주소의 자식 페이지 테이블에 새 페이지를 추가합니다. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: 페이지 삽입에 실패하면 오류 처리를 수행합니다. */
+		return false;
 	}
 	return true;
 }
@@ -119,11 +186,12 @@ __do_fork (void *aux) {
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->parent_if;
 	bool succ = true;
 
 	/* 1. CPU 컨텍스트를 로컬 스택으로 읽습니다. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -145,12 +213,23 @@ __do_fork (void *aux) {
 	 * TODO:       이 함수가 부모의 리소스를 성공적으로 복제할 때까지
 	 * TODO:       부모는 fork()에서 반환되어서는 안 됩니다. */
 
+	if(parent->fd_idx >= FDCOUNT_LIMIT) goto error;
+
+	current->fd_idx = parent->fd_idx;
+	for(int fd = 3; fd < parent->fd_idx; fd++) {
+		if(parent->fdt[fd] == NULL) continue;
+		current->fdt[fd] = file_duplicate(parent->fdt[fd]);
+	}
+
+	sema_up(&current->fork_sema);
+
 	process_init ();
 
 	/* 마지막으로 새로 만든 프로세스로 전환합니다. */
 	if (succ)
 		do_iret (&if_);
 error:
+	sema_up(&current->fork_sema);
 	thread_exit ();
 }
 
@@ -259,8 +338,19 @@ process_wait (tid_t child_tid UNUSED) {
 	 * XXX:       process_wait를 구현하기 전에 여기에 무한 루프를 추가하는 것이 좋습니다. */
 
 	//while(1) {}
-	for(int i=0; i<2000000000; i++){}
-	return -1;
+	
+	struct thread *child = get_child_process(child_tid);
+
+	if(child == NULL) return -1;
+
+	sema_down(&child->wait_sema);
+
+	int exit_status = child->exit_status;
+	list_remove(&child->child_elem);
+
+	sema_up(&child->exit_sema);
+
+	return exit_status;
 }
 
 /* 프로세스를 종료합니다. 이 함수는 thread_exit()에 의해 호출됩니다. */
@@ -270,9 +360,6 @@ process_exit (void) {
 	/* TODO: 여기에 코드를 입력하세요.
 	 * TODO: 프로세스 종료 메시지를 구현하세요(project2/process_termination.html 참조).
 	 * TODO: 여기에 프로세스 리소스 정리를 구현하는 것이 좋습니다. */
-
-	// for(int fd = 0; fd < curr->fd_idx; fd++)
-	// close(fd);
 
 	file_close(curr->runn_file);
 

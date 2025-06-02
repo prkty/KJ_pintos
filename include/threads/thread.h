@@ -118,8 +118,7 @@ struct thread {
 	struct list_elem all_elem;
 	
 
-#define USERPROG
-#ifdef USERPROG
+//#ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 	/** project2-System Call */
@@ -136,8 +135,7 @@ struct thread {
 	struct semaphore fork_sema;  // fork가 완료될 때 signal
     struct semaphore exit_sema;  // 자식 프로세스 종료 signal
     struct semaphore wait_sema;  // exit_sema를 기다릴 때 사용
-	int next_fd;
-#endif
+//#endif
 
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

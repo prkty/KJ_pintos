@@ -7,6 +7,9 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "devices/disk.h"
+#include "threads/synch.h"
+
+struct lock filesys_lock;
 
 /* The disk that contains the file system. */
 struct disk *filesys_disk;

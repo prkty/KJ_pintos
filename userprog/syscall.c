@@ -17,11 +17,13 @@
 #include "include/lib/kernel/console.h"
 #include "include/threads/thread.h"
 #include "include/devices/input.h"
-
-struct lock filesys_lock;
+#include "include/userprog/process.h"
+#include "include/threads/palloc.h"
+#include "filesys/filesys.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+void putbuf (const char *buffer, size_t n);
 
 /* 시스템 콜.
  *
@@ -87,10 +89,12 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_EXIT:
 			exit(f->R.rdi);
 			break;                   
-		// case SYS_FORK:
-		// 	break;                  
-		// case SYS_EXEC:
-		// 	break;                   
+		case SYS_FORK:
+			f->R.rax = fork(f->R.rdi);
+			break;                  
+		case SYS_EXEC:
+			f->R.rax = exec(f->R.rdi);
+			break;                   
 		case SYS_WAIT:
 			f->R.rax = process_wait(f->R.rdi);
 			break;                   
@@ -128,40 +132,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
 // 문자열의 끝까지 접근 가능한지 확인 안하는 문제 발생! -> check_sting 함수 구현
 void check_address(void* addr) {
-	if (is_kernel_vaddr(addr) || addr == NULL || pml4_get_page(thread_current()->pml4, addr) == NULL)
-        exit(-1);
-}
-
-struct file * process_get_file(int fd) {
-	struct thread *curr = thread_current();
-
-	if(fd < 2 || fd >= FDCOUNT_LIMIT) return NULL;
-
-	return curr->fdt[fd];
-}
-
-int process_add_file(struct file *file) {
-	struct thread *curr = thread_current();
-	struct file **fdt = curr->fdt;
-
-	for(int fd = 2; fd < FD_MAX; fd++) {
-		if(curr->fdt[fd] == NULL) {
-			curr->fdt[fd] = file;
-			return fd;
-		}
-	}
-
-	return -1;
-}
-
-int process_close_file(int fd) {
-	struct thread *curr = thread_current();
-
-    if (fd >= FDCOUNT_LIMIT)
-        return -1;
-
-    curr->fdt[fd] = NULL;
-    return 0;
+	if (is_kernel_vaddr(addr) || addr == NULL) exit(-1);
+	if (pml4_get_page(thread_current()->pml4, addr) == NULL) exit(-1);
 }
 
 void
@@ -172,26 +144,44 @@ halt (void) {
 void
 exit (int status) {
 	struct thread *t = thread_current();
-	t->exit_status = status;
+    t->exit_status = status;
 	printf("%s: exit(%d)\n", t->name, t->exit_status);
-	thread_exit();
+    thread_exit();
 }
 
-// pid_t
-// fork (const char *thread_name){
+pid_t
+fork (const char *thread_name){
+	check_address(thread_name);
+	pid_t result = process_fork(thread_name, NULL);
 	
-// }
+	if(result == TID_ERROR) return -1;
 
-// int
-// exec (const char *file) {
+	return result;
+}
 
-// }
+int
+exec (const char *file) {
+	check_address(file);
+
+	off_t size = strlen(file) + 1;
+	char *cmd_copy = palloc_get_page(PAL_ZERO);
+
+	if(cmd_copy == NULL) return -1;
+
+	memcpy(cmd_copy, file, size);
+
+	if(process_exec(cmd_copy) == -1) {
+		palloc_free_page(cmd_copy);
+		return -1;
+	}
+
+	palloc_free_page(cmd_copy);
+	NOT_REACHED();
+}
 
 int
 wait (pid_t pid) {
-	for(int i = 0; i < 500000000; i ++);
-
-	return -1;
+	return process_wait(pid);
 }
 
 bool
@@ -206,8 +196,6 @@ bool
 remove (const char *file) {
 	
 	check_address(file);
-
-	if(file == NULL) return -1;
 
 	return filesys_remove(file);
 }
@@ -228,23 +216,6 @@ open (const char *file) {
 	
 	*/
 
-	// check_address(file);
-	// struct file *f = filesys_open(file);
-
-	// if(file == NULL) exit(-1);
-
-	// lock_acquire(&filesys_lock);
-	
-
-	// if(f == NULL) {
-	// 	lock_release(&filesys_lock);
-	// 	return -1;
-	// }
-
-	// int fd = process_add_file(f);
-	// lock_release(&filesys_lock);
-	// return fd;
-
 	check_address(file);  // 주소 유효성 검사 (필수)
 
     lock_acquire(&filesys_lock);
@@ -255,9 +226,14 @@ open (const char *file) {
         return -1;
 
     struct thread *t = thread_current();
-    int fd = t->next_fd++;
-    t->fdt[fd] = f; // 또는 list_push_back(&t->file_list, ...)
-    return fd;
+    int fd;
+	for(fd = 3; fd < FDCOUNT_LIMIT; fd++) {
+		if(t->fdt[fd] == NULL) {
+			t->fdt[fd] = f;
+			return fd;
+		}
+	}
+	return -1;
 }
 
 // 파일 디스크립터를 이용해 열린 파일의 크기를 반환
@@ -281,6 +257,10 @@ read (int fd, void *buffer, unsigned size) {
     for (unsigned i = 0; i < size; i++) {
         check_address((uint8_t *)buffer + i);
     }
+
+	if (fd == 1 || fd == 2) {
+    	return -1;
+	}
 
     if(fd == 0) { // stdin
         unsigned char c;
@@ -309,10 +289,12 @@ write (int fd, const void *buffer, unsigned size) {
 	check_address(buffer);
 
 	for(unsigned i = 0; i < size; i++) check_address((uint8_t *)buffer + i);
+	
+	if (fd == 0) return -1;
 
 	// 2단계: 파일 디스크립터가 stdout인지 확인
 	if(fd == 1) {
-		putbuf(buffer, size);
+		putbuf((const char *)buffer, size);
 		return size;
 	}
 
@@ -360,7 +342,10 @@ close (int fd) {
     if (fd < 3 || file == NULL)
         return;
 
-    process_close_file(fd);
-
-    file_close(file);
+	if(file != NULL) {
+		process_close_file(fd);
+		
+		file_close(file);
+		
+	}
 }
